@@ -8,21 +8,30 @@
 
 import UIKit
 import SpriteKit
+import AVFoundation
 class GameScene: SKScene,SKPhysicsContactDelegate {
     
     var scrollNode:SKNode!
     var wallNode:SKNode!
     var bird:SKSpriteNode!
+    var Apple:SKNode!
     
     let birdCategory:UInt32 = 1 << 0
     let groundCategory:UInt32 = 1 << 1
     let wallCategory:UInt32 = 1 << 2
     let scoreCategory:UInt32 = 1 << 3
+    let appleCategory:UInt32 = 1 << 4//appleの衝突判定カテゴリー
     
     var score = 0
+    var itemscore = 0// アイテムスコアを設定
+    
+    var player:AVAudioPlayer?
+    
     let userDefaults:UserDefaults = UserDefaults.standard
     var scoreLabelNode:SKLabelNode!
     var bestScoreLabelNode:SKLabelNode!
+    var itemScoreLabelNode:SKLabelNode!
+    
     
     
     override func didMove(to view: SKView) {
@@ -39,12 +48,19 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
         wallNode = SKNode()
         addChild(wallNode)
         
+        Apple = SKNode()
+        addChild(Apple)
+        
         setupGround()
         setupCloud()
         setupWall()
         setupBird()
+        setApple()
         
         setupScoreLabel()
+        
+        
+        
         
     }
     
@@ -54,9 +70,7 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
         groundTexture.filteringMode = .nearest
         
         let needNumber = Int(self.frame.size.width/groundTexture.size().width)+2
-        print("yes")
-        print(needNumber)
-        
+       
         let moveGround = SKAction.moveBy(x:-groundTexture.size().width,y:0,duration: 5)
         let resetGround = SKAction.moveBy(x:groundTexture.size().width,y:0,duration: 0)
         
@@ -231,7 +245,7 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
             return
         }
         
-        if (contact.bodyA.categoryBitMask & scoreCategory) == scoreCategory || (contact.bodyB.categoryBitMask & scoreCategory) == scoreCategory {
+        if (contact.bodyA.categoryBitMask & scoreCategory) == scoreCategory || (contact.bodyB.categoryBitMask & scoreCategory) == scoreCategory    {
             print("ScoreUp")
             score += 1
             scoreLabelNode.text = "Score:\(score)"
@@ -244,6 +258,29 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
                 userDefaults.synchronize()
                 
             }
+        } else if (contact.bodyA.categoryBitMask & appleCategory) == appleCategory || (contact.bodyB.categoryBitMask & appleCategory) == appleCategory {
+            
+            print("ItemScoreUP")
+            itemscore += 1
+            
+            if (contact.bodyA.categoryBitMask & appleCategory) == appleCategory  {
+                // 再生データの作成.
+                let sound = NSDataAsset(name: "pon")
+                player = try? AVAudioPlayer(data: sound!.data)
+                player?.play() //これで音が鳴る
+                contact.bodyA.node?.removeFromParent()//衝突したappleを消す
+            } else {
+                
+                // 再生データの作成
+                let sound = NSDataAsset(name: "pon")
+                player = try? AVAudioPlayer(data: sound!.data)
+                player?.play() //これで音が鳴る
+                
+                contact.bodyB.node?.removeFromParent()
+            }
+            itemScoreLabelNode.text = "ItemScore:\(itemscore)"//現在のitemscoreを更新
+            
+            
         } else {
             print("GameOver")
             
@@ -261,6 +298,9 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
     }
     
     func restart() {
+        itemscore = 0//itemscoreを0に初期化
+        itemScoreLabelNode.text = "ItemScore:\(itemscore)"
+        
         score = 0
         scoreLabelNode.text = "Score:\(score)"
         
@@ -293,6 +333,70 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
         let bestScore = userDefaults.integer(forKey: "BEST")
         bestScoreLabelNode.text = "Best Score:\(bestScore)"
         self.addChild(bestScoreLabelNode)
+        
+        
+        itemscore = 0
+        itemScoreLabelNode = SKLabelNode()
+        itemScoreLabelNode.fontColor = UIColor.black
+        itemScoreLabelNode.position = CGPoint(x:10,y:self.frame.size.height - 120)
+        itemScoreLabelNode.zPosition = 100
+        itemScoreLabelNode.horizontalAlignmentMode = SKLabelHorizontalAlignmentMode.left
+        itemScoreLabelNode.text = "ItemScore:\(itemscore)"
+        self.addChild(itemScoreLabelNode)
+    }
+    
+    func setApple() {
+        
+        
+        let createAppleAnimation = SKAction.run({
+            
+          
+            
+            let appleTexture = SKTexture(imageNamed:"apple")
+            appleTexture.filteringMode = .linear//りんごの画像を読み込む
+            
+            let wallTexture = SKTexture(imageNamed: "wall")
+            let movingDistancea = CGFloat(self.frame.size.width + wallTexture.size().width)//りんごが動く距離
+            
+            let moveApple = SKAction.moveBy(x:-movingDistancea,y:0,duration: 4)//画面外まで移動
+            let removeApple = SKAction.removeFromParent()//自身を取り除く
+            let appleAnimation = SKAction.sequence([moveApple,removeApple])//画面外まで移動して自身を取り除くアクション
+            
+            
+            let apple = SKSpriteNode(texture:appleTexture)
+            apple.zPosition = -30
+            
+            let groundSize = SKTexture(imageNamed: "ground").size()
+            
+            let random_ay = CGFloat.random(in :groundSize.height*5/4..<self.frame.size.height*4/5)//appleのy座標をランダムに指定
+            
+            apple.xScale = 0.05//appleの大きさを10分の1にする
+            apple.yScale = 0.05//appleの大きさを10分の1にする
+            
+            apple.position = CGPoint(x:self.frame.size.width + wallTexture.size().width/2-movingDistancea/4,y:random_ay)//appleの位置を決める
+            apple.zPosition = -30
+            
+            apple.run(appleAnimation)//actionをappleにつける
+            apple.physicsBody = SKPhysicsBody(circleOfRadius: apple.size.height / 2)//appleに物理演算を追加する
+            apple.physicsBody?.isDynamic = false
+            apple.physicsBody?.categoryBitMask = self.appleCategory//自身のカテゴリーを追加
+            apple.physicsBody?.contactTestBitMask = self.birdCategory//鳥との衝突を検知
+            
+            
+            
+           
+            
+            self.Apple.addChild(apple)//appleをAppleの子供にする
+        })
+        
+        let waitAnimationa = SKAction.wait(forDuration: 2)
+        
+        let repeatForeverAnimationa = SKAction.repeatForever(SKAction.sequence([createAppleAnimation,waitAnimationa]))
+        
+        
+        
+        Apple.run(repeatForeverAnimationa)
+        
     }
 
 }

@@ -46,10 +46,10 @@ class GameScene: SKScene,SKPhysicsContactDelegate {
         addChild(scrollNode)
         
         wallNode = SKNode()
-        addChild(wallNode)
+        scrollNode.addChild(wallNode)
         
         Apple = SKNode()
-        addChild(Apple)
+        scrollNode.addChild(Apple)
         
         setupGround()
         setupCloud()
